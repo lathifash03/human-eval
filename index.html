@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Human Evaluation — Hybrid Pipeline</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f5f5; color: #1a1a1a; font-size: 15px; }
+
+  .header { background: #1e3a5f; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+  .header-text h1 { font-size: 16px; font-weight: 600; }
+  .header-text .subtitle { font-size: 12px; opacity: 0.75; margin-top: 2px; }
+  .progress-bar-wrap { flex: 1; max-width: 200px; margin-left: auto; }
+  .progress-bar-bg { background: rgba(255,255,255,0.2); border-radius: 4px; height: 6px; }
+  .progress-bar-fill { background: #4fc3f7; height: 6px; border-radius: 4px; transition: width 0.4s; }
+  .progress-label { font-size: 11px; opacity: 0.8; margin-top: 4px; text-align: right; }
+
+  .screen { display: none; min-height: 100vh; }
+  .screen.active { display: flex; flex-direction: column; }
+
+  /* Welcome */
+  .welcome-wrap { max-width: 660px; margin: 60px auto; padding: 0 24px; }
+  .welcome-card { background: white; border-radius: 12px; padding: 40px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+  .welcome-card h2 { font-size: 22px; color: #1e3a5f; margin-bottom: 8px; }
+  .welcome-card .desc { color: #555; line-height: 1.75; margin-bottom: 24px; font-size: 14px; }
+  .badge-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+  .badge { background: #e8f0fe; color: #1a4080; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 13px; font-weight: 600; color: #444; margin-bottom: 6px; }
+  .form-group input, .form-group select { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; background: white; }
+  .form-group input:focus, .form-group select:focus { outline: 2px solid #1e3a5f; border-color: transparent; }
+  .btn-primary { background: #1e3a5f; color: white; border: none; padding: 13px 28px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 8px; transition: background 0.2s; }
+  .btn-primary:hover { background: #2a5080; }
+  .btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+
+  .notice { background: #e8f4fd; border-left: 4px solid #1e88e5; border-radius: 0 8px 8px 0; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; line-height: 1.65; color: #1a3a5c; }
+  .notice strong { color: #1565c0; }
+  .warn { background: #fff8e1; border-left: 4px solid #f9a825; border-radius: 0 8px 8px 0; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; line-height: 1.65; color: #5d4037; }
+  .warn strong { color: #e65100; }
+
+  /* Criteria table */
+  .criteria-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px; }
+  .criteria-table th { background: #1e3a5f; color: white; padding: 8px 12px; text-align: left; font-weight: 600; }
+  .criteria-table td { padding: 8px 12px; border-bottom: 1px solid #eee; vertical-align: top; }
+  .criteria-table tr:nth-child(even) td { background: #f9f9f9; }
+  .criteria-table .score { font-weight: 700; color: #1e3a5f; text-align: center; }
+
+  /* Eval */
+  .eval-wrap { max-width: 1240px; margin: 0 auto; padding: 20px 24px 90px; width: 100%; }
+  .pair-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .pair-title { font-size: 18px; font-weight: 700; color: #1e3a5f; }
+  .pair-meta { display: flex; gap: 8px; align-items: center; }
+  .model-badge { padding: 4px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; color: white; }
+  .cat-badge { padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; background: #eef2ff; color: #3949ab; border: 1px solid #c5cae9; }
+  .model-groq { background: #e65100; }
+  .model-gpt { background: #2e7d32; }
+  .model-claude { background: #6a1b9a; }
+
+  .text-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .text-panel { background: white; border-radius: 10px; border: 1px solid #e0e0e0; overflow: hidden; }
+  .text-panel-header { background: #f5f5f5; padding: 10px 16px; font-size: 12px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot-a { background: #1565c0; }
+  .dot-b { background: #2e7d32; }
+  .text-panel-body { padding: 16px; font-size: 13.5px; line-height: 1.8; color: #2a2a2a; max-height: 400px; overflow-y: auto; white-space: pre-wrap; }
+  .text-panel-body::-webkit-scrollbar { width: 6px; }
+  .text-panel-body::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+
+  .rating-card { background: white; border-radius: 10px; border: 1px solid #e0e0e0; padding: 20px 24px; margin-bottom: 14px; }
+  .rating-card h3 { font-size: 15px; font-weight: 700; color: #1e3a5f; margin-bottom: 4px; }
+  .rating-card .rating-q { font-size: 13px; color: #555; margin-bottom: 14px; line-height: 1.6; }
+  .stars { display: flex; gap: 8px; margin-bottom: 10px; }
+  .star-btn { width: 44px; height: 44px; border: 2px solid #ddd; border-radius: 8px; background: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; justify-content: center; color: #555; }
+  .star-btn:hover { border-color: #1e3a5f; background: #e8f0fe; color: #1e3a5f; }
+  .star-btn.selected { background: #1e3a5f; border-color: #1e3a5f; color: white; }
+  .rubric-wrap { font-size: 12px; color: #888; margin-bottom: 4px; min-height: 20px; }
+  .rubric-wrap.active { color: #1a4080; font-weight: 600; }
+  .comment-box { width: 100%; border: 1px solid #ddd; border-radius: 8px; padding: 10px 12px; font-size: 13px; resize: vertical; min-height: 60px; margin-top: 10px; font-family: inherit; color: #333; }
+  .comment-box:focus { outline: 2px solid #1e3a5f; border-color: transparent; }
+
+  .nav-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #e0e0e0; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; z-index: 99; box-shadow: 0 -2px 8px rgba(0,0,0,0.05); }
+  .nav-info { font-size: 13px; color: #888; }
+  .nav-info span { color: #1e3a5f; font-weight: 600; }
+  .btn-nav { padding: 10px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: 2px solid #1e3a5f; transition: all 0.2s; }
+  .btn-back { background: white; color: #1e3a5f; }
+  .btn-back:hover { background: #e8f0fe; }
+  .btn-next { background: #1e3a5f; color: white; }
+  .btn-next:hover { background: #2a5080; }
+  .btn-next:disabled { background: #bbb; border-color: #bbb; cursor: not-allowed; }
+
+  /* Done */
+  .done-wrap { max-width: 560px; margin: 80px auto; padding: 0 24px; text-align: center; }
+  .done-icon { font-size: 60px; margin-bottom: 16px; }
+  .done-card { background: white; border-radius: 12px; padding: 40px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+  .done-card h2 { font-size: 24px; color: #1e3a5f; margin-bottom: 12px; }
+  .done-card p { color: #555; line-height: 1.75; margin-bottom: 20px; font-size: 14px; }
+  .summary-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; text-align: left; }
+  .summary-table th { background: #f0f4f8; padding: 9px 12px; color: #333; font-weight: 700; }
+  .summary-table td { padding: 9px 12px; border-top: 1px solid #eee; color: #333; }
+  .btn-download { background: #1e3a5f; color: white; border: none; padding: 14px 32px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; width: 100%; transition: background 0.2s; }
+  .btn-download:hover { background: #2a5080; }
+
+  @media (max-width: 720px) {
+    .text-grid { grid-template-columns: 1fr; }
+    .eval-wrap { padding: 14px 12px 100px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header" id="mainHeader" style="display:none;">
+  <div class="header-text">
+    <h1>Text Conversion Quality Evaluation</h1>
+    <div class="subtitle">Human Evaluation — Hybrid Pipeline · Lathifah Sahda · ITS 2026</div>
+  </div>
+  <div class="progress-bar-wrap" id="progressWrap" style="display:none;">
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill" style="width:0%"></div></div>
+    <div class="progress-label" id="progressLabel">0 / 0</div>
+  </div>
+</div>
+
+<!-- SCREEN 1: WELCOME -->
+<div class="screen active" id="screenWelcome">
+  <div class="welcome-wrap">
+    <div class="welcome-card">
+      <h2>Human Evaluation: News Text Conversion Quality</h2>
+      <p class="desc">
+        Welcome! You are asked to evaluate the quality of automated conversions from original news articles (narrative format) into procedural step-by-step texts produced by an AI system. Your honest judgment matters — there are no right or wrong answers.
+      </p>
+
+      <div class="badge-row">
+        <span class="badge">20 text pairs</span>
+        <span class="badge">3 evaluation criteria</span>
+        <span class="badge">~2–3 hours total</span>
+        <span class="badge">Scale 1–5</span>
+      </div>
+
+      <div class="notice">
+        <strong>What you will do:</strong> For each pair, read <strong>Text A</strong> (the original news article) and <strong>Text B</strong> (the AI-generated procedural output), then rate three aspects independently on a 1–5 scale. Please read both texts fully before scoring.
+      </div>
+
+      <p style="font-size:13px; font-weight:700; color:#1e3a5f; margin-bottom:10px;">Evaluation Criteria</p>
+      <table class="criteria-table">
+        <tr><th style="width:28%">Criterion</th><th>Key Question</th><th style="width:18%">What to Check</th></tr>
+        <tr>
+          <td><strong>1. Factual Accuracy</strong></td>
+          <td>Are all facts in Text B consistent with Text A? Are any names, numbers, dates, or events wrong, added, or missing?</td>
+          <td>Names, figures, dates, event order, hallucinations</td>
+        </tr>
+        <tr>
+          <td><strong>2. Structural Clarity</strong></td>
+          <td>Are the steps logically ordered and easy to follow? Is the numbering consistent?</td>
+          <td>Step order, logical flow, numbering consistency</td>
+        </tr>
+        <tr>
+          <td><strong>3. Readability</strong></td>
+          <td>Is Text B easy to understand? Is the language clear, concise, and natural?</td>
+          <td>Sentence clarity, ambiguity, pronoun clarity, natural flow</td>
+        </tr>
+      </table>
+
+      <table class="criteria-table" style="margin-bottom:24px;">
+        <tr><th style="width:14%">Score</th><th>Meaning</th></tr>
+        <tr><td class="score">5</td><td>Excellent — fully meets the criterion without any issues</td></tr>
+        <tr><td class="score">4</td><td>Good — meets the criterion well with only minor issues</td></tr>
+        <tr><td class="score">3</td><td>Fair — partially meets the criterion; noticeable issues present</td></tr>
+        <tr><td class="score">2</td><td>Poor — many issues; only partially fulfills the criterion</td></tr>
+        <tr><td class="score">1</td><td>Very Poor — does not meet the criterion at all</td></tr>
+      </table>
+
+      <div class="warn">
+        <strong>Important:</strong> Rate each pair <em>independently</em> — do not compare pairs with each other. Focus solely on how well Text B converts Text A. Do not judge the article content itself. Average time per pair: 5–8 minutes.
+      </div>
+
+      <div class="form-group">
+        <label>Full Name *</label>
+        <input type="text" id="inputName" placeholder="Enter your name" />
+      </div>
+      <div class="form-group">
+        <label>Affiliation / Institution</label>
+        <input type="text" id="inputAffil" placeholder="e.g. Informatics, ITS Surabaya" />
+      </div>
+      <div class="form-group">
+        <label>AI Model to Evaluate *</label>
+        <select id="inputModel">
+          <option value="">-- Select model --</option>
+          <option value="groq">Groq (Llama 3.3 70B)</option>
+          <option value="gpt">GPT (GPT-4o-mini)</option>
+          <option value="claude">Claude (Haiku)</option>
+        </select>
+      </div>
+
+      <button class="btn-primary" id="btnStart" disabled onclick="startEval()">Start Evaluation</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN 2: EVALUATION -->
+<div class="screen" id="screenEval">
+  <div class="eval-wrap">
+
+    <div class="pair-header">
+      <div class="pair-title" id="pairTitle">Pair 1 of 20</div>
+      <div class="pair-meta">
+        <span class="cat-badge" id="catBadge">business</span>
+        <span class="model-badge" id="modelBadge">GROQ</span>
+      </div>
+    </div>
+
+    <div class="warn" style="margin-bottom:16px; font-size:12px; padding:10px 14px;">
+      Read <strong>both texts completely</strong> before scoring. Rate each criterion independently.
+    </div>
+
+    <div class="text-grid">
+      <div class="text-panel">
+        <div class="text-panel-header"><div class="dot dot-a"></div>Text A — Original News Article (Narrative)</div>
+        <div class="text-panel-body" id="textA">Loading...</div>
+      </div>
+      <div class="text-panel">
+        <div class="text-panel-header"><div class="dot dot-b"></div>Text B — AI-Generated Procedural Output</div>
+        <div class="text-panel-body" id="textB">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Rating 1: Factual Accuracy -->
+    <div class="rating-card">
+      <h3>1. Factual Accuracy</h3>
+      <div class="rating-q">Are all facts in Text B (names, numbers, dates, sequence of events) consistent with Text A? Is any information added, changed, or missing?</div>
+      <div class="stars" id="stars_accuracy"></div>
+      <div class="rubric-wrap" id="rubric_accuracy"></div>
+      <textarea class="comment-box" id="comment_accuracy" placeholder="Optional comment — e.g. wrong figure in step 3, missing entity..."></textarea>
+    </div>
+
+    <!-- Rating 2: Structural Clarity -->
+    <div class="rating-card">
+      <h3>2. Structural Clarity</h3>
+      <div class="rating-q">Are the procedural steps logically ordered and easy to follow? Is the numbering consistent? Does each step flow naturally from the previous one?</div>
+      <div class="stars" id="stars_structure"></div>
+      <div class="rubric-wrap" id="rubric_structure"></div>
+      <textarea class="comment-box" id="comment_structure" placeholder="Optional comment — e.g. step 4 seems out of order..."></textarea>
+    </div>
+
+    <!-- Rating 3: Readability -->
+    <div class="rating-card">
+      <h3>3. Readability</h3>
+      <div class="rating-q">Is Text B easy to read and understand? Is the language clear and natural, without ambiguity or unnecessary complexity?</div>
+      <div class="stars" id="stars_readability"></div>
+      <div class="rubric-wrap" id="rubric_readability"></div>
+      <textarea class="comment-box" id="comment_readability" placeholder="Optional comment — e.g. unclear pronoun in step 2..."></textarea>
+    </div>
+
+  </div>
+
+  <div class="nav-bar">
+    <div class="nav-info" id="navInfo">Pair <span>1</span> of 20</div>
+    <div style="display:flex; gap:10px;">
+      <button class="btn-nav btn-back" id="btnBack" onclick="prevPair()" style="display:none;">← Back</button>
+      <button class="btn-nav btn-next" id="btnNext" onclick="nextPair()" disabled>Next →</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN 3: DONE -->
+<div class="screen" id="screenDone">
+  <div class="done-wrap">
+    <div class="done-icon">✅</div>
+    <div class="done-card">
+      <h2>Evaluation Complete!</h2>
+      <p>Thank you for your contribution. Below is a summary of your ratings. Please download the CSV file and send it to the researcher.</p>
+      <table class="summary-table" id="summaryTable"></table>
+      <p style="font-size:12px; color:#999; margin-top:8px; margin-bottom:20px;">
+        Contact: <a href="mailto:5025221159@student.its.ac.id" style="color:#1e3a5f;">5025221159@student.its.ac.id</a>
+      </p>
+      <button class="btn-download" onclick="downloadCSV()">⬇ Download Results as CSV</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── DATA ─────────────────────────────────────────────────────────────────────
+// Replace procedural_text values with actual output from your pipeline
+// (groq / gpt / claude version per evaluator assignment)
+const SAMPLE_DATA = [
+  { id:"001", category:"business",
+    original_text:`Tesla announced on Tuesday that it has achieved record-breaking quarterly deliveries of 484,507 vehicles in Q2 2024, surpassing analyst expectations of 439,000 units. The company delivered 422,405 Model 3 and Model Y vehicles, along with 62,102 units from its other models including the Cybertruck, Model S, and Model X. CEO Elon Musk credited the strong results to improved production efficiency at the Gigafactory in Texas. Tesla also reported that it produced 410,831 vehicles during the same period. The stock rose 10% following the announcement, reaching $246 per share. Analysts noted this was the first quarterly increase after two consecutive declines.`,
+    procedural_text:`1. Tesla reported record quarterly deliveries of 484,507 vehicles in Q2 2024, exceeding analyst forecasts of 439,000 units.\n2. The company delivered 422,405 Model 3 and Model Y vehicles during the quarter.\n3. Tesla delivered 62,102 units of other models, including the Cybertruck, Model S, and Model X.\n4. CEO Elon Musk attributed the results to improved production efficiency at the Texas Gigafactory.\n5. Tesla produced 410,831 vehicles during the same quarter.\n6. Tesla's stock rose 10% after the announcement, reaching $246 per share.\n7. Analysts identified this as the first quarterly delivery increase following two consecutive declines.`
+  },
+  { id:"002", category:"technology",
+    original_text:`Apple unveiled its Vision Pro spatial computing headset at the Worldwide Developers Conference on June 5, 2023. The device, priced at $3,499, runs visionOS and features two micro-OLED displays with 23 million pixels each. Senior VP Craig Federighi demonstrated how users can control the interface using only their eyes, hands, and voice. The headset includes M2 and R1 chips — the R1 specifically handles sensor data processing with 12-millisecond latency. Apple plans to ship the device to customers in early 2024. The company positioned the product as a new computing paradigm, calling it "spatial computing."`,
+    procedural_text:`1. Apple unveiled the Vision Pro headset at WWDC on June 5, 2023.\n2. Apple priced the Vision Pro at $3,499.\n3. The device runs visionOS and features two micro-OLED displays with 23 million pixels each.\n4. Senior VP Craig Federighi demonstrated eye, hand, and voice interface controls.\n5. Apple equipped the headset with M2 and R1 chips; the R1 chip processes sensor data with 12ms latency.\n6. Apple scheduled shipments to customers for early 2024.\n7. Apple positioned the Vision Pro as a new "spatial computing" paradigm.`
+  },
+  { id:"003", category:"health",
+    original_text:`The World Health Organization declared mpox a public health emergency of international concern for the second time on August 14, 2024. The declaration followed a surge in cases in the Democratic Republic of Congo, where over 15,600 cases and 537 deaths were reported in 2024. A new, more severe variant called Clade Ib has been identified, spreading through sexual contact and household transmission. WHO Director-General Tedros Adhanom Ghebreyesus stated that the outbreak requires an urgent international response. Several African nations, including Uganda, Rwanda, and Kenya, have reported their first cases. Vaccines are available but supplies remain limited in affected regions.`,
+    procedural_text:`1. WHO declared mpox a public health emergency of international concern on August 14, 2024.\n2. The surge in the Democratic Republic of Congo prompted the declaration, with over 15,600 cases and 537 deaths in 2024.\n3. Researchers identified a new variant, Clade Ib, spreading through sexual contact and household transmission.\n4. WHO Director-General Tedros Adhanom Ghebreyesus called for an urgent international response.\n5. Uganda, Rwanda, and Kenya reported their first mpox cases.\n6. Health authorities noted that vaccines are available but supplies remain limited in affected regions.`
+  },
+  { id:"004", category:"environment",
+    original_text:`Scientists at the European Space Agency confirmed that 2023 was the hottest year on record, with global average temperatures reaching 1.48°C above pre-industrial levels. The Copernicus Climate Change Service reported the data on January 9, 2024. Researchers noted that every month of 2023 ranked among the top 3 warmest for its respective month. The Arctic sea ice extent reached a record low in September 2023. Lead scientist Dr. Samantha Burgess warned that the world is approaching the 1.5°C threshold established by the Paris Agreement. She called on governments to accelerate emission reduction commitments ahead of COP29.`,
+    procedural_text:`1. ESA scientists confirmed 2023 as the hottest year on record, with temperatures 1.48°C above pre-industrial levels.\n2. The Copernicus Climate Change Service published the findings on January 9, 2024.\n3. Researchers determined that every month of 2023 ranked among the top 3 warmest for its month.\n4. Arctic sea ice reached a record low in September 2023.\n5. Lead scientist Dr. Samantha Burgess warned of approaching the 1.5°C Paris Agreement threshold.\n6. Dr. Burgess urged governments to accelerate emission reduction commitments before COP29.`
+  },
+  { id:"005", category:"education",
+    original_text:`Harvard University announced on March 15, 2024 that it would expand its free online learning program, offering 50 new courses through its edX platform by September 2024. University President Claudine Gay stated that the expansion aims to make quality education accessible to 2 million additional learners globally. The program will focus on STEM fields, business, and public health. Harvard also announced a $50 million endowment fund specifically for developing free course content. Partner universities MIT, Stanford, and Yale are expected to contribute courses to the initiative. Students who complete the courses will receive verified certificates recognized by over 300 employers.`,
+    procedural_text:`1. Harvard University announced the expansion of its free online learning program on March 15, 2024.\n2. The university planned to add 50 new courses through edX by September 2024.\n3. President Claudine Gay stated the goal of reaching 2 million additional global learners.\n4. Harvard focused the expansion on STEM, business, and public health fields.\n5. The university established a $50 million endowment for free course development.\n6. MIT, Stanford, and Yale agreed to contribute courses to the initiative.\n7. Learners completing courses would receive certificates recognized by over 300 employers.`
+  },
+  { id:"006", category:"politics",
+    original_text:`Indonesia's Constitutional Court ruled on November 16, 2023 that presidential candidates must be at least 40 years old or have previously served as regional heads. The ruling effectively allowed Gibran Rakabuming Raka, the 36-year-old son of President Joko Widodo, to register as Prabowo Subianto's running mate for the 2024 presidential election. Chief Justice Anwar Usman, who is married to Jokowi's sister, presided over the case, prompting calls for his recusal. The decision was reached with a 6-3 majority vote. The Indonesian Judges' Honorary Council subsequently reprimanded Anwar Usman for ethical violations related to his involvement in the ruling.`,
+    procedural_text:`1. Indonesia's Constitutional Court issued its ruling on November 16, 2023, requiring presidential candidates to be 40 or older or to have served as regional heads.\n2. The ruling permitted Gibran Rakabuming Raka, aged 36, to register as Prabowo Subianto's running mate.\n3. Chief Justice Anwar Usman, Jokowi's brother-in-law, presided over the case despite conflict of interest concerns.\n4. The court reached the decision by a 6-3 majority vote.\n5. The Indonesian Judges' Honorary Council reprimanded Anwar Usman for ethical violations in the ruling.`
+  },
+  { id:"007", category:"crime",
+    original_text:`A New York federal court convicted former FTX CEO Sam Bankman-Fried on November 2, 2023 on all seven counts of fraud and conspiracy. The jury deliberated for just four hours before reaching the verdict. Prosecutors argued that Bankman-Fried had stolen $8 billion from FTX customers to fund Alameda Research's trading operations and personal expenses. Lead prosecutor Nicolas Roos stated that the defendant had "built a pyramid of deceit." Judge Lewis Kaplan scheduled sentencing for March 28, 2024. Bankman-Fried's lawyers announced they would appeal the verdict. The collapse of FTX in November 2022 wiped out billions in customer assets.`,
+    procedural_text:`1. A New York federal court convicted Sam Bankman-Fried on all seven fraud and conspiracy counts on November 2, 2023.\n2. The jury returned the verdict after four hours of deliberation.\n3. Prosecutors established that Bankman-Fried stole $8 billion from FTX customers to fund Alameda Research and personal expenses.\n4. Lead prosecutor Nicolas Roos described the scheme as a "pyramid of deceit."\n5. Judge Lewis Kaplan scheduled sentencing for March 28, 2024.\n6. Bankman-Fried's legal team announced plans to appeal the verdict.\n7. Prosecutors noted that FTX's collapse in November 2022 had wiped out billions in customer assets.`
+  },
+  { id:"008", category:"sport",
+    original_text:`Argentina defeated France 4-2 on penalties to win the 2022 FIFA World Cup Final on December 18, 2022 at Lusail Stadium in Qatar. The match ended 3-3 after extra time. Lionel Messi scored twice, including a penalty in extra time, while Kylian Mbappé completed a hat-trick for France in the second half comeback. Goalkeeper Emiliano Martínez saved two French penalties to seal Argentina's victory. It was Argentina's third World Cup title and Messi's first, ending a 36-year wait since their 1986 triumph. FIFA awarded Messi the Golden Ball for the tournament's best player and Mbappé the Golden Boot for top scorer with 8 goals.`,
+    procedural_text:`1. Argentina and France played the 2022 FIFA World Cup Final at Lusail Stadium, Qatar on December 18, 2022.\n2. Argentina led 2-0 before France mounted a second-half comeback, with Mbappé completing a hat-trick to level at 3-3.\n3. Lionel Messi scored twice, including a penalty in extra time.\n4. The match proceeded to a penalty shootout after a 3-3 draw in extra time.\n5. Goalkeeper Emiliano Martínez saved two French penalties, securing Argentina's 4-2 win.\n6. Argentina claimed their third World Cup title, ending a 36-year wait since 1986.\n7. FIFA awarded Messi the Golden Ball and Mbappé the Golden Boot with 8 goals.`
+  },
+  { id:"009", category:"war",
+    original_text:`Russia launched its full-scale invasion of Ukraine on February 24, 2022, deploying troops from three directions: from Belarus in the north toward Kyiv, from the east across the Donbas, and from Crimea in the south. Russian President Vladimir Putin announced the start of a "special military operation," claiming it aimed to "denazify" Ukraine. Ukrainian President Volodymyr Zelensky declared martial law and called on reservists to join the military. NATO immediately activated its rapid response force. Within 48 hours, Russia captured the Chernobyl exclusion zone. The UN Security Council held an emergency session but Russia vetoed a resolution condemning the attack.`,
+    procedural_text:`1. Russia launched a full-scale invasion of Ukraine on February 24, 2022, deploying troops from Belarus, eastern Donbas, and Crimea.\n2. President Putin declared a "special military operation" aimed at "denazifying" Ukraine.\n3. President Zelensky declared martial law and called reservists to military service.\n4. NATO activated its rapid response force in response to the invasion.\n5. Russian forces captured the Chernobyl exclusion zone within 48 hours.\n6. The UN Security Council convened an emergency session; Russia vetoed a condemnation resolution.`
+  },
+  { id:"010", category:"disaster",
+    original_text:`A 7.8-magnitude earthquake struck southern Turkey and northern Syria on February 6, 2023 at 4:17 AM local time. The epicenter was located near Gaziantep, Turkey. The quake, followed by a 7.5-magnitude aftershock hours later, killed over 50,000 people and left 1.5 million homeless across both countries. Turkish President Recep Tayyip Erdogan declared a state of emergency in 10 provinces. International rescue teams from 45 countries arrived to assist. The destruction was particularly severe in Hatay province, where entire city blocks collapsed. The World Bank estimated reconstruction costs at $34 billion. The Turkish government arrested 12 contractors for building code violations.`,
+    procedural_text:`1. A 7.8-magnitude earthquake struck near Gaziantep, Turkey at 4:17 AM on February 6, 2023.\n2. A 7.5-magnitude aftershock followed hours later, compounding the damage.\n3. The twin earthquakes killed over 50,000 people and displaced 1.5 million across Turkey and Syria.\n4. President Erdogan declared a state of emergency in 10 Turkish provinces.\n5. Rescue teams from 45 countries responded to assist in search and recovery operations.\n6. Hatay province suffered severe destruction, with entire city blocks collapsing.\n7. The World Bank estimated reconstruction costs at $34 billion.\n8. Turkish authorities arrested 12 contractors for building code violations.`
+  },
+  { id:"011", category:"business",
+    original_text:`OpenAI launched ChatGPT Enterprise on August 28, 2023, targeting large corporations with enhanced privacy, security, and customization features. The product offers unlimited access to GPT-4, with context windows of 32,000 tokens — double the standard version. CEO Sam Altman stated that over 80% of Fortune 500 companies were already using ChatGPT in some capacity. Enterprise pricing was not disclosed publicly. The plan includes SSO integration, admin controls, and compliance certifications. Goldman Sachs and Morgan Stanley were cited as early enterprise customers. OpenAI reported that the enterprise version processes over 100 billion words per day across all users.`,
+    procedural_text:`1. OpenAI launched ChatGPT Enterprise on August 28, 2023, targeting large corporations.\n2. The product offered unlimited GPT-4 access with 32,000-token context windows, double the standard version.\n3. CEO Sam Altman disclosed that over 80% of Fortune 500 companies already used ChatGPT.\n4. OpenAI did not publicly disclose Enterprise pricing.\n5. The plan included SSO integration, admin controls, and compliance certifications.\n6. Goldman Sachs and Morgan Stanley were named as early enterprise customers.\n7. OpenAI reported the enterprise version processes over 100 billion words per day.`
+  },
+  { id:"012", category:"technology",
+    original_text:`Google DeepMind released AlphaFold 3 on May 8, 2024, expanding its protein structure prediction capabilities to include DNA, RNA, and small molecules. The model achieved 76% accuracy on the PoseBusters benchmark for predicting drug-protein interactions. CEO Demis Hassabis stated that AlphaFold 3 represents "a step change in drug discovery." The model is freely accessible through DeepMind's AlphaFold Server for academic researchers. However, commercial users must negotiate a separate license. Nature published the accompanying research paper. AlphaFold 2, released in 2021, had predicted structures for over 200 million proteins.`,
+    procedural_text:`1. Google DeepMind released AlphaFold 3 on May 8, 2024, adding DNA, RNA, and small molecule prediction capabilities.\n2. The model achieved 76% accuracy on the PoseBusters benchmark for drug-protein interaction prediction.\n3. CEO Demis Hassabis described AlphaFold 3 as a breakthrough in drug discovery.\n4. DeepMind made the model freely accessible via the AlphaFold Server for academic researchers.\n5. Commercial users were required to negotiate separate licensing agreements.\n6. Nature published the corresponding research paper.\n7. DeepMind noted that AlphaFold 2, released in 2021, had predicted over 200 million protein structures.`
+  },
+  { id:"013", category:"health",
+    original_text:`The FDA approved the first CRISPR-based gene therapy, Casgevy, developed by Vertex Pharmaceuticals and CRISPR Therapeutics, on December 8, 2023. The therapy treats sickle cell disease and transfusion-dependent beta-thalassemia in patients aged 12 and older. In clinical trials, 29 of 30 patients with sickle cell disease were pain-crisis free for at least 12 months after treatment. The one-time treatment is priced at $2.2 million. Dr. Peter Marks of the FDA's Center for Biologics stated that the approval represents a landmark for gene therapy. The FDA also approved Bluebird Bio's Lyfgenia on the same day as a competing treatment for sickle cell disease.`,
+    procedural_text:`1. The FDA approved Casgevy, developed by Vertex Pharmaceuticals and CRISPR Therapeutics, on December 8, 2023.\n2. The therapy targeted sickle cell disease and transfusion-dependent beta-thalassemia in patients aged 12 and older.\n3. Clinical trials showed 29 of 30 sickle cell patients remained pain-crisis free for at least 12 months.\n4. The one-time treatment was priced at $2.2 million.\n5. Dr. Peter Marks of the FDA called the approval a landmark for gene therapy.\n6. The FDA simultaneously approved Bluebird Bio's Lyfgenia as a competing sickle cell treatment.`
+  },
+  { id:"014", category:"environment",
+    original_text:`The Amazon rainforest experienced its worst drought in 120 years in 2023, with river levels in the Negro River near Manaus dropping to a record low of 13.59 meters below the normal dry-season level. Over 1 million people lost access to clean water. The drought killed more than 150 pink river dolphins in Lake Tefé. Brazilian President Luiz Inácio Lula da Silva declared a state of emergency in Amazonas state in October 2023. Researchers linked the drought to the combination of El Niño weather patterns and climate change. The Amazon River, the world's largest by volume, saw flow rates drop by 40% compared to historical averages.`,
+    procedural_text:`1. The Amazon rainforest experienced its worst drought in 120 years in 2023.\n2. The Negro River near Manaus dropped to a record 13.59 meters below normal dry-season levels.\n3. Over 1 million people lost access to clean water due to the drought.\n4. The drought killed more than 150 pink river dolphins in Lake Tefé.\n5. President Lula declared a state of emergency in Amazonas state in October 2023.\n6. Researchers attributed the drought to El Niño patterns combined with climate change.\n7. Amazon River flow rates dropped 40% below historical averages.`
+  },
+  { id:"015", category:"education",
+    original_text:`The OECD released its 2023 PISA results on December 5, 2023, showing Singapore ranked first globally in mathematics, reading, and science among 690,000 students from 81 countries. Singapore's average math score was 575, compared to the OECD average of 472. The United States ranked 34th in mathematics with a score of 465. OECD Secretary-General Mathias Cormann noted a significant post-pandemic learning recovery gap, with students in low-income countries losing an average of 5 years of schooling equivalent. Finland, Japan, and South Korea also ranked in the top 10. The report recommended investing in teacher training and early childhood education.`,
+    procedural_text:`1. The OECD published the 2023 PISA results on December 5, 2023, covering 690,000 students from 81 countries.\n2. Singapore ranked first globally in mathematics, reading, and science.\n3. Singapore's average math score reached 575, above the OECD average of 472.\n4. The United States ranked 34th in mathematics with a score of 465.\n5. OECD Secretary-General Mathias Cormann highlighted that students in low-income countries lost an average of 5 years of learning equivalent.\n6. Finland, Japan, and South Korea also placed in the top 10.\n7. The OECD recommended increased investment in teacher training and early childhood education.`
+  },
+  { id:"016", category:"politics",
+    original_text:`The United States Senate passed a $95 billion foreign aid package on February 13, 2024, including $61 billion for Ukraine, $14 billion for Israel, and $9.2 billion for humanitarian assistance. The bill passed 70-29 after months of Republican opposition. Senate Majority Leader Chuck Schumer praised the vote as "a moment of clarity." However, the bill then stalled in the House, where Speaker Mike Johnson initially refused to bring it to a vote. President Biden urged Congress to act quickly, stating that delays had already allowed Russia to make advances in eastern Ukraine. The Senate package also included $4.8 billion for the Indo-Pacific region.`,
+    procedural_text:`1. The US Senate passed a $95 billion foreign aid package on February 13, 2024, by a 70-29 vote.\n2. The package allocated $61 billion for Ukraine, $14 billion for Israel, $9.2 billion for humanitarian aid, and $4.8 billion for the Indo-Pacific.\n3. Senate Majority Leader Chuck Schumer described the vote as a moment of clarity.\n4. The bill stalled in the House after Speaker Mike Johnson declined to schedule a vote.\n5. President Biden urged Congress to act quickly, warning that delays had allowed Russian advances in eastern Ukraine.`
+  },
+  { id:"017", category:"crime",
+    original_text:`French police arrested Telegram founder Pavel Durov at Paris-Le Bourget Airport on August 24, 2024, as part of a judicial investigation. Investigators alleged that Durov was complicit in allowing criminal activities on the platform, including child sexual abuse material distribution, drug trafficking, and fraud. The arrest warrant listed 12 charges against Durov. Telegram, which has nearly 1 billion users worldwide, had long refused to cooperate with law enforcement requests. French authorities released Durov on August 28 after he posted a €5 million bail. France's government emphasized that the arrest was a judicial, not political, matter. Durov denied the charges.`,
+    procedural_text:`1. French police arrested Telegram founder Pavel Durov at Paris-Le Bourget Airport on August 24, 2024.\n2. Investigators accused Durov of complicity in criminal activities on Telegram, including CSAM distribution, drug trafficking, and fraud.\n3. Authorities issued an arrest warrant listing 12 charges against Durov.\n4. French authorities noted Telegram's long-standing refusal to cooperate with law enforcement.\n5. Durov was released on August 28 after posting €5 million bail.\n6. The French government clarified the arrest was a judicial, not political, decision.\n7. Durov denied all charges.`
+  },
+  { id:"018", category:"sport",
+    original_text:`Novak Djokovic won his 24th Grand Slam title at the 2023 US Open on September 10, 2023, defeating Daniil Medvedev 6-3, 7-6, 6-3 in the final at Arthur Ashe Stadium. The victory made Djokovic the most successful male tennis player in Grand Slam history, surpassing his own record of 23. At 36 years old, he became the oldest US Open champion in the Open Era. Djokovic had previously won the Australian Open and Wimbledon in 2023, making him the first player since Steffi Graf in 1988 to hold the top three Slam titles simultaneously. He earned $3 million in prize money from the victory.`,
+    procedural_text:`1. Novak Djokovic won the 2023 US Open on September 10, 2023, defeating Daniil Medvedev 6-3, 7-6, 6-3.\n2. The victory gave Djokovic his 24th Grand Slam title, making him the most successful male player in history.\n3. At 36, Djokovic became the oldest US Open champion in the Open Era.\n4. Djokovic had already won the 2023 Australian Open and Wimbledon, holding three Slam titles simultaneously.\n5. This achievement matched Steffi Graf's feat from 1988 of holding three top Slam titles at once.\n6. Djokovic received $3 million in prize money.`
+  },
+  { id:"019", category:"war",
+    original_text:`Hamas launched a surprise attack on Israel on October 7, 2023, firing approximately 3,000 rockets and sending armed militants across the Gaza border. The attack killed 1,200 Israelis, primarily civilians, and took 253 people hostage. It was the deadliest day for Jewish people since the Holocaust. Israeli Prime Minister Benjamin Netanyahu declared a state of war and announced "Operation Iron Swords." Israel responded with massive airstrikes on Gaza, killing over 300 people in the initial 24 hours. The United States, European Union, and United Kingdom condemned the Hamas attack. Israel announced a "complete siege" of Gaza, cutting off electricity, food, and fuel.`,
+    procedural_text:`1. Hamas launched a surprise attack on Israel on October 7, 2023, firing 3,000 rockets and infiltrating the Gaza border.\n2. The attack killed 1,200 Israelis, primarily civilians, and took 253 people hostage.\n3. The assault marked the deadliest day for Jewish people since the Holocaust.\n4. Prime Minister Netanyahu declared a state of war and announced "Operation Iron Swords."\n5. Israel launched massive airstrikes on Gaza, killing over 300 people within the first 24 hours.\n6. The United States, European Union, and United Kingdom condemned the Hamas attack.\n7. Israel imposed a "complete siege" on Gaza, cutting off electricity, food, and fuel.`
+  },
+  { id:"020", category:"disaster",
+    original_text:`Tropical cyclone Freddy became the longest-lasting tropical cyclone on record, persisting for 36 days from February to March 2023. The storm made two landfalls in Mozambique, devastating the port city of Quelimane on February 24 and the city of Sofala on March 11. Freddy killed over 1,400 people across Mozambique, Malawi, and Zimbabwe, and displaced more than 500,000. The cyclone brought winds of up to 165 km/h and rainfall exceeding 500mm in 24 hours in some areas. The World Meteorological Organization confirmed the record, surpassing the previous record held by Cyclone John from 1994. Malawi declared a state of disaster on March 14.`,
+    procedural_text:`1. Tropical cyclone Freddy became the longest-lasting cyclone on record, persisting 36 days from February to March 2023.\n2. The storm made its first landfall in Quelimane, Mozambique on February 24, 2023.\n3. Freddy made a second landfall near Sofala, Mozambique on March 11.\n4. The cyclone killed over 1,400 people across Mozambique, Malawi, and Zimbabwe, and displaced more than 500,000.\n5. Freddy brought winds up to 165 km/h and 500mm of rainfall in 24 hours in some areas.\n6. The World Meteorological Organization confirmed the record, surpassing Cyclone John from 1994.\n7. Malawi declared a state of disaster on March 14.`
+  }
+];
+
+// ─── APP STATE ────────────────────────────────────────────────────────────────
+let evaluatorName='', evaluatorAffil='', selectedModel='';
+let currentPairIdx=0, ratings=[];
+const NUM_PAIRS=20;
+
+const RUBRICS = {
+  accuracy: ["1 — Many facts wrong or fabricated","2 — Significant inaccuracies","3 — Mostly correct, some errors","4 — Almost all facts correct","5 — All facts fully accurate"],
+  structure: ["1 — No clear structure","2 — Confusing order","3 — Fairly logical, some issues","4 — Clear and well-structured","5 — Perfectly logical & consistent"],
+  readability: ["1 — Very difficult to understand","2 — Many unclear passages","3 — Understandable with effort","4 — Easy to read","5 — Very clear and natural"]
+};
+
+function initRatings(){
+  ratings=Array.from({length:NUM_PAIRS},(_,i)=>({
+    pair_id:SAMPLE_DATA[i].id, category:SAMPLE_DATA[i].category,
+    accuracy:0, structure:0, readability:0,
+    comment_accuracy:'', comment_structure:'', comment_readability:''
+  }));
+}
+
+document.getElementById('inputName').addEventListener('input', checkForm);
+document.getElementById('inputModel').addEventListener('change', checkForm);
+function checkForm(){
+  const ok = document.getElementById('inputName').value.trim() && document.getElementById('inputModel').value;
+  document.getElementById('btnStart').disabled = !ok;
+}
+
+function startEval(){
+  evaluatorName=document.getElementById('inputName').value.trim();
+  evaluatorAffil=document.getElementById('inputAffil').value.trim();
+  selectedModel=document.getElementById('inputModel').value;
+  initRatings(); currentPairIdx=0;
+  document.getElementById('mainHeader').style.display='flex';
+  document.getElementById('progressWrap').style.display='block';
+  const badge=document.getElementById('modelBadge');
+  badge.textContent=selectedModel.toUpperCase();
+  badge.className='model-badge model-'+selectedModel;
+  showScreen('screenEval');
+  loadPair(0);
+}
+
+function loadPair(idx){
+  const pair=SAMPLE_DATA[idx], r=ratings[idx];
+  document.getElementById('pairTitle').textContent=`Pair ${idx+1} of ${NUM_PAIRS}`;
+  document.getElementById('navInfo').innerHTML=`Pair <span>${idx+1}</span> of ${NUM_PAIRS}`;
+  document.getElementById('catBadge').textContent=pair.category;
+  document.getElementById('textA').textContent=pair.original_text;
+  document.getElementById('textB').textContent=pair.procedural_text;
+  updateProgress();
+  ['accuracy','structure','readability'].forEach(a=>buildStars(a,r[a]));
+  ['accuracy','structure','readability'].forEach(a=>{
+    document.getElementById('comment_'+a).value=r['comment_'+a];
+    document.getElementById('comment_'+a).oninput=()=>{ratings[idx]['comment_'+a]=document.getElementById('comment_'+a).value;};
+  });
+  document.getElementById('btnBack').style.display=idx>0?'block':'none';
+  document.getElementById('btnNext').textContent=idx===NUM_PAIRS-1?'Finish':'Next →';
+  checkNextBtn();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function buildStars(aspect,val){
+  const c=document.getElementById('stars_'+aspect);
+  const r=document.getElementById('rubric_'+aspect);
+  c.innerHTML='';
+  for(let v=1;v<=5;v++){
+    const b=document.createElement('button');
+    b.className='star-btn'+(v===val?' selected':'');
+    b.textContent=v; b.title=RUBRICS[aspect][v-1];
+    b.onclick=()=>setRating(aspect,v);
+    c.appendChild(b);
+  }
+  r.textContent=val>0?RUBRICS[aspect][val-1]:'Select a score above';
+  r.className='rubric-wrap'+(val>0?' active':'');
+}
+
+function setRating(aspect,value){
+  ratings[currentPairIdx][aspect]=value;
+  buildStars(aspect,value);
+  checkNextBtn();
+}
+
+function checkNextBtn(){
+  const r=ratings[currentPairIdx];
+  document.getElementById('btnNext').disabled=!(r.accuracy>0&&r.structure>0&&r.readability>0);
+}
+
+function nextPair(){
+  if(currentPairIdx<NUM_PAIRS-1){currentPairIdx++;loadPair(currentPairIdx);}
+  else finishEval();
+}
+function prevPair(){if(currentPairIdx>0){currentPairIdx--;loadPair(currentPairIdx);}}
+
+function updateProgress(){
+  const done=ratings.filter(r=>r.accuracy>0&&r.structure>0&&r.readability>0).length;
+  document.getElementById('progressFill').style.width=Math.round(done/NUM_PAIRS*100)+'%';
+  document.getElementById('progressLabel').textContent=`${done} / ${NUM_PAIRS} done`;
+}
+
+function finishEval(){
+  const avg=k=>( ratings.reduce((s,r)=>s+r[k],0)/NUM_PAIRS ).toFixed(2);
+  const a=avg('accuracy'),s=avg('structure'),rd=avg('readability');
+  const all=((+a+ +s+ +rd)/3).toFixed(2);
+  document.getElementById('summaryTable').innerHTML=`
+    <tr><th>Criterion</th><th>Average Score</th></tr>
+    <tr><td>Factual Accuracy</td><td><strong>${a} / 5</strong></td></tr>
+    <tr><td>Structural Clarity</td><td><strong>${s} / 5</strong></td></tr>
+    <tr><td>Readability</td><td><strong>${rd} / 5</strong></td></tr>
+    <tr style="background:#f0f4f8"><td><strong>Overall Average</strong></td><td><strong>${all} / 5</strong></td></tr>`;
+  document.getElementById('mainHeader').style.display='none';
+  showScreen('screenDone');
+}
+
+function downloadCSV(){
+  const ts=new Date().toISOString().slice(0,16).replace('T','_').replace(':','-');
+  const hdr=['evaluator_name','evaluator_affil','model','pair_id','category','pair_number',
+              'accuracy','structure','readability','avg_score',
+              'comment_accuracy','comment_structure','comment_readability','timestamp'];
+  const rows=ratings.map((r,i)=>{
+    const avg=((r.accuracy+r.structure+r.readability)/3).toFixed(2);
+    return [esc(evaluatorName),esc(evaluatorAffil),esc(selectedModel),
+            esc(r.pair_id),esc(r.category),i+1,
+            r.accuracy,r.structure,r.readability,avg,
+            esc(r.comment_accuracy),esc(r.comment_structure),esc(r.comment_readability),ts].join(',');
+  });
+  const csv=[hdr.join(','),...rows].join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download=`eval_${selectedModel}_${evaluatorName.replace(/\s+/g,'_')}_${ts}.csv`;
+  a.click();
+}
+
+function esc(v){
+  if(!v)return'';
+  const s=String(v).replace(/"/g,'""');
+  return/[",\n]/.test(s)?`"${s}"`:s;
+}
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+</script>
+</body>
+</html>
