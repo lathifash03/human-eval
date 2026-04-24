@@ -127,18 +127,17 @@
     <div class="welcome-card">
       <h2>Human Evaluation: News Text Conversion Quality</h2>
       <p class="desc">
-        Welcome! You are asked to evaluate the quality of automated conversions from original news articles (narrative format) into procedural step-by-step texts produced by an AI system. Your honest judgment matters — there are no right or wrong answers.
+        Thank you for taking part in this study. Your task is to read pairs of texts and judge how well an AI system converted a news article into a step-by-step procedural format. There are no right or wrong answers; what matters is your honest reading of each pair.
       </p>
 
       <div class="badge-row">
         <span class="badge">20 text pairs</span>
         <span class="badge">3 evaluation criteria</span>
-        <span class="badge">~2–3 hours total</span>
         <span class="badge">Scale 1–5</span>
       </div>
 
       <div class="notice">
-        <strong>What you will do:</strong> For each pair, read <strong>Text A</strong> (the original news article) and <strong>Text B</strong> (the AI-generated procedural output), then rate three aspects independently on a 1–5 scale. Please read both texts fully before scoring.
+        Each pair shows <strong>Text A</strong> (the original news article) alongside <strong>Text B</strong> (the AI output). Read both in full, then score three aspects on a 1 to 5 scale. Work through each pair independently before moving on.
       </div>
 
       <p style="font-size:13px; font-weight:700; color:#1e3a5f; margin-bottom:10px;">Evaluation Criteria</p>
@@ -146,32 +145,32 @@
         <tr><th style="width:28%">Criterion</th><th>Key Question</th><th style="width:18%">What to Check</th></tr>
         <tr>
           <td><strong>1. Factual Accuracy</strong></td>
-          <td>Are all facts in Text B consistent with Text A? Are any names, numbers, dates, or events wrong, added, or missing?</td>
-          <td>Names, figures, dates, event order, hallucinations</td>
+          <td>Are the facts in Text B consistent with Text A? Check whether any names, numbers, dates, or events are wrong, added, or left out.</td>
+          <td>Names, figures, dates, event order</td>
         </tr>
         <tr>
           <td><strong>2. Structural Clarity</strong></td>
-          <td>Are the steps logically ordered and easy to follow? Is the numbering consistent?</td>
-          <td>Step order, logical flow, numbering consistency</td>
+          <td>Are the steps logically ordered and easy to follow? Is the numbering consistent throughout?</td>
+          <td>Step order, logical flow, numbering</td>
         </tr>
         <tr>
           <td><strong>3. Readability</strong></td>
-          <td>Is Text B easy to understand? Is the language clear, concise, and natural?</td>
-          <td>Sentence clarity, ambiguity, pronoun clarity, natural flow</td>
+          <td>Is Text B easy to read and understand? Is the language clear and natural, without unnecessary complexity?</td>
+          <td>Sentence clarity, ambiguity, natural flow</td>
         </tr>
       </table>
 
       <table class="criteria-table" style="margin-bottom:24px;">
         <tr><th style="width:14%">Score</th><th>Meaning</th></tr>
-        <tr><td class="score">5</td><td>Excellent — fully meets the criterion without any issues</td></tr>
-        <tr><td class="score">4</td><td>Good — meets the criterion well with only minor issues</td></tr>
-        <tr><td class="score">3</td><td>Fair — partially meets the criterion; noticeable issues present</td></tr>
-        <tr><td class="score">2</td><td>Poor — many issues; only partially fulfills the criterion</td></tr>
-        <tr><td class="score">1</td><td>Very Poor — does not meet the criterion at all</td></tr>
+        <tr><td class="score">5</td><td>Excellent. Fully meets the criterion with no issues.</td></tr>
+        <tr><td class="score">4</td><td>Good. Meets the criterion well; only minor issues.</td></tr>
+        <tr><td class="score">3</td><td>Fair. Partially meets the criterion; noticeable issues present.</td></tr>
+        <tr><td class="score">2</td><td>Poor. Many issues; only partially fulfills the criterion.</td></tr>
+        <tr><td class="score">1</td><td>Very Poor. Does not meet the criterion.</td></tr>
       </table>
 
       <div class="warn">
-        <strong>Important:</strong> Rate each pair <em>independently</em> — do not compare pairs with each other. Focus solely on how well Text B converts Text A. Do not judge the article content itself. Average time per pair: 5–8 minutes.
+        Please judge each pair on its own merits. Do not compare one pair against another, and do not evaluate the news content itself, only how well the conversion was done. Take around 5 to 8 minutes per pair.
       </div>
 
       <div class="form-group">
@@ -273,7 +272,11 @@
       <p style="font-size:12px; color:#999; margin-top:8px; margin-bottom:20px;">
         Contact: <a href="mailto:5025221159@student.its.ac.id" style="color:#1e3a5f;">5025221159@student.its.ac.id</a>
       </p>
-      <button class="btn-download" onclick="downloadCSV()">⬇ Download Results as CSV</button>
+      <button class="btn-download" id="btnSubmit" onclick="submitToSheets()">Send Results to Researcher</button>
+      <div id="submitStatus"></div>
+      <p style="font-size:12px;color:#aaa;margin-top:16px;">
+        Having trouble? <a href="#" onclick="downloadCSV();return false;" style="color:#1e3a5f;">Download as CSV instead</a> and email it to 5025221159@student.its.ac.id
+      </p>
     </div>
   </div>
 </div>
@@ -474,6 +477,42 @@ function finishEval(){
     <tr style="background:#f0f4f8"><td><strong>Overall Average</strong></td><td><strong>${all} / 5</strong></td></tr>`;
   document.getElementById('mainHeader').style.display='none';
   showScreen('screenDone');
+}
+
+// ─── GOOGLE SHEETS ENDPOINT ──────────────────────────────────────────────────
+// Replace with your Apps Script Web App URL after deploying
+const SHEETS_URL = 'YOUR_APPS_SCRIPT_URL_HERE';
+
+async function submitToSheets(){
+  const ts = new Date().toISOString().slice(0,16).replace('T','_').replace(':','-');
+  const rows = ratings.map((r,i) => {
+    const avg = ((r.accuracy+r.structure+r.readability)/3).toFixed(2);
+    return [
+      evaluatorName, evaluatorAffil, selectedModel,
+      r.pair_id, r.category, i+1,
+      r.accuracy, r.structure, r.readability, avg,
+      r.comment_accuracy, r.comment_structure, r.comment_readability, ts
+    ];
+  });
+  const btn = document.getElementById('btnSubmit');
+  btn.textContent = 'Submitting...';
+  btn.disabled = true;
+  try {
+    await fetch(SHEETS_URL, {
+      method: 'POST', mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows })
+    });
+    btn.textContent = 'Submitted!';
+    btn.style.background = '#2e7d32';
+    document.getElementById('submitStatus').innerHTML =
+      '<p style="color:#2e7d32;font-weight:600;margin-top:12px;">Your results have been saved. Thank you for your time!</p>';
+  } catch(err) {
+    btn.textContent = 'Send Results to Researcher';
+    btn.disabled = false;
+    document.getElementById('submitStatus').innerHTML =
+      '<p style="color:#c62828;margin-top:12px;">Could not connect. Please use the download link below.</p>';
+  }
 }
 
 function downloadCSV(){
